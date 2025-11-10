@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <title>Free Live Log Viewer – Monitor Logs in Real Time</title>
+    <meta
+      name="description"
+      content="A free browser-based live log viewer that lets you stream, auto-refresh, and format log files in real-time. Made with love from Haryana."
+    />
+    <meta name="robots" content="index, follow" />
+    <link rel="canonical" href="https://yourusername.github.io/log-viewer/" />
+
+    <!-- Open Graph -->
+    <meta property="og:title" content="Free Live Log Viewer – Real-Time Log Reader" />
+    <meta
+      property="og:description"
+      content="Monitor and view log files in real-time. Auto-refresh, cache-busting, and last N lines support. Free and open source."
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://yourusername.github.io/log-viewer/" />
+    <meta property="og:image" content="https://freelancingdiary.com/wp-content/uploads/2024/10/log-viewer-banner.png" />
+
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Free Live Log Viewer – Real-Time Log Reader" />
+    <meta name="twitter:description" content="Free and open-source live log viewer with auto-refresh and cache-busting." />
+
+    <style>
+      body {
+        font-family: "Segoe UI", sans-serif;
+        background: #121212;
+        color: #f0f0f0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 20px;
+      }
+
+      h1 {
+        color: #ff9800;
+        margin-bottom: 10px;
+      }
+
+      form {
+        background: #1e1e1e;
+        padding: 15px 20px;
+        border-radius: 10px;
+        box-shadow: 0 0 10px #0006;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        justify-content: center;
+        align-items: center;
+      }
+
+      input,
+      select,
+      button {
+        padding: 8px 12px;
+        border-radius: 5px;
+        border: none;
+        font-size: 14px;
+      }
+
+      input,
+      select {
+        background: #2a2a2a;
+        color: #fff;
+      }
+
+      label {
+        font-size: 14px;
+        color: #ddd;
+      }
+
+      button {
+        background: #ff9800;
+        color: #000;
+        font-weight: bold;
+        cursor: pointer;
+      }
+
+      button:hover {
+        background: #ffa726;
+      }
+
+      .output {
+        overflow: auto;
+        width: 90vw;
+        height: 70vh;
+        margin-top: 20px;
+        border: 1px solid #444;
+        background: #0d0d0d;
+        padding: 10px;
+        white-space: pre-wrap;
+        font-family: monospace;
+        line-height: 1.4em;
+      }
+
+      a {
+        color: #80d8ff;
+      }
+
+      strong {
+        color: #ffb74d;
+      }
+
+      .checkbox-group {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+      }
+
+      footer {
+        margin-top: 15px;
+        font-size: 14px;
+        color: #bbb;
+        text-align: center;
+      }
+
+      .heart {
+        color: #ff4d4d;
+        animation: blink 1.2s infinite;
+      }
+
+      @keyframes blink {
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.3;
+        }
+      }
+
+      footer a {
+        color: #ffa726;
+        text-decoration: none;
+        font-weight: bold;
+      }
+
+      footer a:hover {
+        color: #ffcc80;
+      }
+    </style>
+  </head>
+
+  <body>
+    <h1>Free Live Log Viewer</h1>
+
+    <form id="settingsForm">
+      <input
+        type="text"
+        id="logUrl"
+        placeholder="Enter log file URL"
+        required
+      />
+      <input
+        type="number"
+        id="refreshSec"
+        placeholder="Refresh every (seconds)"
+        min="1"
+        required
+      />
+      <select id="mode">
+        <option value="full">Show full log</option>
+        <option value="partial">Show last N lines</option>
+      </select>
+      <input
+        type="number"
+        id="numLines"
+        placeholder="Lines (e.g. 100)"
+        min="1"
+        style="display:none"
+      />
+      <div class="checkbox-group">
+        <input type="checkbox" id="cacheBuster" checked />
+        <label for="cacheBuster">Add cache-buster (?v=timestamp)</label>
+      </div>
+      <button type="submit">Start Reading</button>
+    </form>
+
+    <div class="output">Enter log file URL and refresh rate above.</div>
+
+    <footer>
+      Made with love from a village in Haryana
+      <span class="heart">❤️</span><br />
+      <a href="https://freelancingdiary.com/" target="_blank" rel="dofollow"
+        >freelancingdiary.com</a
+      >
+    </footer>
+
+    <script>
+      document.addEventListener("DOMContentLoaded", function () {
+        const outputdiv = document.querySelector(".output");
+        const form = document.getElementById("settingsForm");
+        const mode = document.getElementById("mode");
+        const numLinesInput = document.getElementById("numLines");
+        const cacheBuster = document.getElementById("cacheBuster");
+        let refreshTimer = null;
+
+        mode.addEventListener("change", () => {
+          numLinesInput.style.display =
+            mode.value === "partial" ? "inline-block" : "none";
+        });
+
+        form.addEventListener("submit", function (e) {
+          e.preventDefault();
+          const url = document.getElementById("logUrl").value.trim();
+          const seconds = parseInt(document.getElementById("refreshSec").value);
+          const modeVal = mode.value;
+          const numLines = parseInt(numLinesInput.value) || 100;
+          const useCacheBuster = cacheBuster.checked;
+
+          if (!url || !seconds) {
+            alert("Please enter both URL and refresh time!");
+            return;
+          }
+
+          outputdiv.innerHTML =
+            "Reading file: <strong>" +
+            url +
+            "</strong><br>Mode: <strong>" +
+            (modeVal === "full"
+              ? "Full log"
+              : "Last " + numLines + " lines") +
+            "</strong><br>Cache-buster: " +
+            (useCacheBuster ? "On ✅" : "Off ❌") +
+            "<br>Refresh interval: " +
+            seconds +
+            " seconds";
+
+          if (refreshTimer) clearInterval(refreshTimer);
+
+          async function getData() {
+            try {
+              let fullUrl = url;
+              if (useCacheBuster) {
+                fullUrl += (url.includes("?") ? "&" : "?") + "v=" + Date.now();
+              }
+
+              const response = await fetch(fullUrl);
+              if (!response.ok) {
+                outputdiv.innerHTML = `Response status: ${response.status}`;
+                return;
+              }
+
+              const result = await response.text();
+              let content = result;
+
+              if (modeVal === "partial") {
+                const lines = result.trim().split(/\r?\n/);
+                content = lines.slice(-numLines).join("\n");
+              }
+
+              const formatted = content.replace(
+                /(https?:\/\/[^\s]+)/g,
+                '<a href="$1" target="_blank">$1</a>'
+              );
+
+              outputdiv.innerHTML = formatted;
+              outputdiv.scrollTop = outputdiv.scrollHeight;
+            } catch (error) {
+              outputdiv.innerHTML = "<strong>Error:</strong> " + error.message;
+            }
+          }
+
+          getData();
+          refreshTimer = setInterval(getData, seconds * 1000);
+        });
+      });
+    </script>
+  </body>
+</html>
